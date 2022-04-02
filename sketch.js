@@ -9,15 +9,18 @@ let max_y = 1.5
 // max_y = 1
 
 let max_iterations = 100
-let infinity = 999
-let image_size = 720
+let infinity = 100
+let canvas_size = 720
 
 // ZOOM:
-var zoom_w, zoom_h, zoom_tow, zoom_toh;
-var zoom_x, zoom_y, zoom_tox, zoom_toy;
-var zoom_step = .001; //zoom step per mouse tick 
+let zoom_w, zoom_h, zoom_tow, zoom_toh;
+let zoom_x, zoom_y, zoom_tox, zoom_toy;
+let zoom_step = .001; //zoom step per mouse tick 
 
-function mandelbrot(x, y){
+let frames_until_rerender = Math.infinity // when this reaches zero, full res rerender starts
+let render_wait_frames = 50 // after user interaction, wait this long until new full res render
+
+function mandelbrot(x, y, render_size){
   /*
     Check if f(z) = z^2 + c explodes for growing z_i
     z_0 = 0 
@@ -43,8 +46,8 @@ function mandelbrot(x, y){
         = a^2 - b^2 + 2abi // this turns out to be a new complex number :)
   */
   // turn pixel coordinate into coordinate on complex plane:
-  let coordinate_a = map(x,0,image_size,min_x, max_x)
-  let coordinate_b = map(y,0,image_size,min_y, max_y)
+  let coordinate_a = map(x,0,render_size,min_x, max_x)
+  let coordinate_b = map(y,0,render_size,min_y, max_y)
   // initialize iteration:
   let iteration = 0
   // let z = 0
@@ -65,13 +68,14 @@ function mandelbrot(x, y){
   return [pixel_brightness]
 }
 
-function make_mandelbrot_image(){
-  let img = createImage(image_size, image_size);
+function make_mandelbrot_image(resolution=1){
+  let render_size = canvas_size*resolution
+  let img = createImage(render_size, render_size);
   img.loadPixels()
-  for (let x = 0; x < image_size; x++){
-    for(let y = 0; y < image_size; y++){
-      let color = mandelbrot(x, y)
-      let pixel = (x+y*width)*4
+  for (let x = 0; x < render_size; x++){
+    for(let y = 0; y < render_size; y++){
+      let color = mandelbrot(x, y, render_size)
+      let pixel = (x+y*render_size)*4
       img.pixels[pixel+0] = color // r value
       img.pixels[pixel+1] = color // g value
       img.pixels[pixel+2] = color // b value
@@ -79,15 +83,13 @@ function make_mandelbrot_image(){
     }
   }
   img.updatePixels()
-  //img.save('saved-image', 'png');
+  img.resize(canvas_size, canvas_size)
+  img.save('saved-image', 'png');
   return img
 }
 
 
-function update_boundaries(){
-
-  max_iterations = max_iterations_input.value()
-  // infinity = infinity_value_input.value()
+function rerender(resolution = 1){
 
   let new_img_x = zoom_x-zoom_w/2
   let new_img_y = zoom_y-zoom_h/2
@@ -96,18 +98,18 @@ function update_boundaries(){
 
   let percentage_top_left_x = -1 * new_img_x / new_img_w
   let percentage_top_left_y = -1 * new_img_y / new_img_h
-  let percentage_w = image_size / new_img_w
-  let percentage_h = image_size / new_img_h
+  let percentage_w = canvas_size / new_img_w
+  let percentage_h = canvas_size / new_img_h
   
-  let new_top_left_x = image_size * percentage_top_left_x
-  let new_top_left_y = image_size * percentage_top_left_y
-  let new_bottom_right_x = new_top_left_x + (percentage_w * image_size)
-  let new_bottom_right_y = new_top_left_y + (percentage_h * image_size)
+  let new_top_left_x = canvas_size * percentage_top_left_x
+  let new_top_left_y = canvas_size * percentage_top_left_y
+  let new_bottom_right_x = new_top_left_x + (percentage_w * canvas_size)
+  let new_bottom_right_y = new_top_left_y + (percentage_h * canvas_size)
 
-  let new_min_x = map(new_top_left_x,0,image_size,min_x, max_x)
-  let new_max_x = map(new_bottom_right_x,0,image_size,min_x, max_x)
-  let new_min_y = map(new_top_left_y,0,image_size,min_y, max_y)
-  let new_max_y = map(new_bottom_right_y,0,image_size,min_y, max_y)
+  let new_min_x = map(new_top_left_x,0,canvas_size,min_x, max_x)
+  let new_max_x = map(new_bottom_right_x,0,canvas_size,min_x, max_x)
+  let new_min_y = map(new_top_left_y,0,canvas_size,min_y, max_y)
+  let new_max_y = map(new_bottom_right_y,0,canvas_size,min_y, max_y)
 
   console.log(new_min_x+","+new_max_x)
   console.log(new_min_y+","+new_max_y)
@@ -117,48 +119,57 @@ function update_boundaries(){
   min_y = new_min_y
   max_y = new_max_y
 
-  mandelbrot_image = make_mandelbrot_image()
+  mandelbrot_image = make_mandelbrot_image(resolution)
 
   // initial zoom position:
-  zoom_w = zoom_tow = image_size
-  zoom_h = zoom_toh = image_size
-  zoom_x = zoom_tox = image_size / 2
-  zoom_y = zoom_toy = image_size / 2
+  zoom_w = zoom_tow = canvas_size
+  zoom_h = zoom_toh = canvas_size
+  zoom_x = zoom_tox = canvas_size / 2
+  zoom_y = zoom_toy = canvas_size / 2
 }
 
+function max_iterations_changed(){
+  let sel = max_iterations_select.value()
+  if (sel === "auto"){
+    return
+  }
+  max_iterations = sel
+  frames_until_rerender = render_wait_frames
+}
 
 let mandelbrot_image
-let max_iterations_input, infinity_value_input, update_button;
+let max_iterations_select;
 
 function setup() {
-  image_size = Math.min(windowWidth, windowHeight)
-  createCanvas(image_size, image_size);
+  // canvas_size = Math.min(windowWidth, windowHeight)
+  createCanvas(canvas_size, canvas_size);
 
   mandelbrot_image = make_mandelbrot_image()
 
   let max_iterations_info = createElement('h5', 'number of iterations:');
-  max_iterations_info.position(image_size+10, 0);
+  max_iterations_info.position(canvas_size+10, 0);
 
-  max_iterations_input = createInput(max_iterations, int);
-  max_iterations_input.position(image_size+10, 40);
+  max_iterations_select = createSelect();
+  max_iterations_select.position(canvas_size+10, 40);
+  max_iterations_select.option(100)
+  max_iterations_select.option(250)
+  max_iterations_select.option(500)
+  max_iterations_select.option(750)
+  max_iterations_select.option(1000)
+  max_iterations_select.option(1500)
+  max_iterations_select.option(5000)
+  max_iterations_select.option("auto")
+  max_iterations_select.changed(max_iterations_changed)
 
-  // let infinity_info = createElement('h5', 'infinity value:');
-  // infinity_info.position(image_size+10, 50);
 
-  // infinity_value_input = createInput(infinity, int);
-  // infinity_value_input.position(image_size+10, 90);
 
-  update_button = createButton('Rerender Current View');
-  update_button.position(image_size+10, 70);
-  update_button.mousePressed(update_boundaries);
 
   // initial zoom position:
-  zoom_w = zoom_tow = image_size
-  zoom_h = zoom_toh = image_size
-  zoom_x = zoom_tox = image_size / 2
-  zoom_y = zoom_toy = image_size / 2
+  zoom_w = zoom_tow = canvas_size
+  zoom_h = zoom_toh = canvas_size
+  zoom_x = zoom_tox = canvas_size / 2
+  zoom_y = zoom_toy = canvas_size / 2
 }
-
 
 
 function draw() {
@@ -176,44 +187,68 @@ function draw() {
   let new_img_y = zoom_y-zoom_h/2
 
   image(mandelbrot_image,new_img_x, new_img_y, zoom_w, zoom_h);
+  textSize(8);
+  fill(255, 255, 255);
+
+  let a_coord = ((min_x+max_x)/2)
+  let b_coord = ((min_y+max_y)/2)
+  text('a:'+a_coord, 5, 10);
+  text('b:'+b_coord, 5, 20)
+
+  let zoom_pow = Math.floor(Math.log10((1/(max_x - min_x)))) // might not be accurate
+  text('Zoom: 10^'+zoom_pow, 5, 30)
+
+
+  // console.log(frames_until_rerender)
+  frames_until_rerender = frames_until_rerender - 1
+
+
+  if (frames_until_rerender == render_wait_frames - 5){
+    rerender(0.25) // start full resultion render if user didnt interact for render_wait_frames = 50
+  }
+
+  if (frames_until_rerender == 0){
+    rerender(1) // start full resultion render if user didnt interact for render_wait_frames = 50
+    frames_until_rerender = 5000
+  }
 }
 
 
 function mouseDragged() {
-  if (mouseX > image_size || mouseY > image_size){
+  if (mouseX > canvas_size || mouseY > canvas_size){
     return
   }
   zoom_tox += (mouseX-pmouseX)*0.3;
   zoom_toy += (mouseY-pmouseY)*0.3;
+
+  frames_until_rerender = render_wait_frames
 }
 
 
 function mouseWheel(event) {
-
-  if (mouseX > image_size || mouseY > image_size){
+  if (mouseX > canvas_size || mouseY > canvas_size){
     return
   }
-
   var e = -event.delta;
-
   if (e>0) { //zoom in
     for (var i=0; i<e; i++) {
-      if (zoom_tow>30*image_size) return; //max zoom
+      if (zoom_tow>30*canvas_size) return; //max zoom
       zoom_tox -= zoom_step * (mouseX - zoom_tox);
       zoom_toy -= zoom_step * (mouseY - zoom_toy);
       zoom_tow *= zoom_step+1;
       zoom_toh *= zoom_step+1;
     }
   }
-  
   if (e<0) { //zoom out
     for (var i=0; i<-e; i++) {
-      if (zoom_tow<image_size) return; //min zoom
+      if (zoom_tow*30<canvas_size) return; //min zoom
       zoom_tox += zoom_step/(zoom_step+1) * (mouseX - zoom_tox); 
       zoom_toy += zoom_step/(zoom_step+1) * (mouseY - zoom_toy);
       zoom_toh /= zoom_step+1;
       zoom_tow /= zoom_step+1;
     }
   }
+
+  frames_until_rerender = render_wait_frames
 }
 
