@@ -1,25 +1,49 @@
-let min_x = -2.3
-let max_x = 0.8
-let min_y = -1.5
-let max_y = 1.5
-
-// min_x = -1
-// max_x = 1
-// min_y = -1
-// max_y = 1
-
 let max_iterations = 100
 let infinity = 100
-let canvas_size = 720
+let canvas_size = 500
 
-// ZOOM:
+// the image of the mandelbrot set that is currently shown
+let mandelbrot_image
+
+// define an initial area on the complex plane:
+let min_x = -2.3
+let max_x = 0.8
+let min_y = 1.5
+let max_y = -1.5
+
+// based on the initial values above, define center coordinates and zoom factor:
+let current_coordinate_a = -0.75
+let current_coordinate_b = 0
+let current_zoom_log10 = -0.5
+
+// when this is replaced with a list of coordinates, zoom and pan to the position will start
+let current_target = null
+
+// list of targets i found (ie stole)
+let targets = {
+  "reset":[-0.75, 0, -0.5, 100],
+  "julia_islands":[-1.4177481, 0.000140785, 6, 1500],
+  "elefant_valley":[0.250745, 0.00003468, 4.5, 3000],
+  "seahorse":[-0.743517833, -0.127094578, 1.75, 1000],
+  "starfish":[-0.374004139, 0.659792175, 1.75, 1000],
+  "tree":[-1.940157343, 0.000001, 5.5, 250],
+  "sun":[-0.776592847, -0.136640848, 5, 1000],
+  "stormclouds":[-1.746780894, 0.004784543, 5.3, 1000]
+}
+
+// zoom variables:
 let zoom_w, zoom_h, zoom_tow, zoom_toh;
 let zoom_x, zoom_y, zoom_tox, zoom_toy;
-let zoom_step = .001; //zoom step per mouse tick 
+let zoom_step = .001; //zoom step per mouse tick
 
-let frames_until_rerender = Math.infinity // when this reaches zero, full res rerender starts
-let render_wait_frames = 50 // after user interaction, wait this long until new full res render
+// when this reaches 30 half resolution render starts, when it reaches zero, full resolution rerender starts
+// set to a higher value of "render_wait_frames" on every user interaction
+let frames_until_rerender = Math.infinity 
+let render_wait_frames = 50 // after user interaction, wait this long until new full res render, show half res render earlier
 
+
+// takes a coordinate and tells you if its on the complex plane
+// render size is the pixel width and height of the image, so the x and y coordinates from the complex plane can be mapped accordingly
 function mandelbrot(x, y, render_size){
   /*
     Check if f(z) = z^2 + c explodes for growing z_i
@@ -68,6 +92,9 @@ function mandelbrot(x, y, render_size){
   return [pixel_brightness]
 }
 
+// return an image of canvas_size*canvas_size of the mandelbrot set
+// based on the global variables that define the currently visible area
+// use resolution < 1 to be faster but with less detail
 function make_mandelbrot_image(resolution=1){
   let render_size = canvas_size*resolution
   let img = createImage(render_size, render_size);
@@ -84,15 +111,16 @@ function make_mandelbrot_image(resolution=1){
   }
   img.updatePixels()
   img.resize(canvas_size, canvas_size)
-  img.save('saved-image', 'png');
+  // img.save('saved-image', 'png');
   return img
 }
 
 
+// after the global variables of the zoom and image position change
+// call this to update the image of the mandelbrot set accordingly
 function rerender(resolution = 1){
-
-  let new_img_x = zoom_x-zoom_w/2
-  let new_img_y = zoom_y-zoom_h/2
+  let new_img_x = zoom_x - zoom_w/2
+  let new_img_y = zoom_y - zoom_h/2
   let new_img_w = zoom_w
   let new_img_h = zoom_h
 
@@ -111,35 +139,86 @@ function rerender(resolution = 1){
   let new_min_y = map(new_top_left_y,0,canvas_size,min_y, max_y)
   let new_max_y = map(new_bottom_right_y,0,canvas_size,min_y, max_y)
 
-  console.log(new_min_x+","+new_max_x)
-  console.log(new_min_y+","+new_max_y)
+  // console.log(new_min_x+","+new_max_x)
+  // console.log(new_min_y+","+new_max_y)
 
   min_x = new_min_x
   max_x = new_max_x
   min_y = new_min_y
   max_y = new_max_y
 
-  mandelbrot_image = make_mandelbrot_image(resolution)
+  current_coordinate_a = ((min_x+max_x)/2)
+  current_coordinate_b = ((min_y+max_y)/2)
+  current_zoom_log10 =Math.log10((1/(max_x - min_x))) // might not be accurate
 
-  // initial zoom position:
+  mandelbrot_image = make_mandelbrot_image(resolution)
+}
+
+// make the current view the new default
+function reset_zoom(){
   zoom_w = zoom_tow = canvas_size
   zoom_h = zoom_toh = canvas_size
   zoom_x = zoom_tox = canvas_size / 2
   zoom_y = zoom_toy = canvas_size / 2
 }
 
-function max_iterations_changed(){
-  let sel = max_iterations_select.value()
-  if (sel === "auto"){
+
+
+// call this function to move the camera a little closer to the current target
+function move_to_target(){
+  let target_a = current_target[0]
+  let target_b = current_target[1]
+  let target_zoom = current_target[2]
+
+  let a_width = max_x-min_x
+  let b_width = max_y-min_y
+
+  let target_width = 1 / Math.pow(10, target_zoom)
+  let diff_to_width = target_width - a_width
+
+  let diff_to_width_pixel = map(diff_to_width, 0, a_width, 0, canvas_size)
+
+  let diff_to_a = target_a - current_coordinate_a
+  let diff_to_b = target_b - current_coordinate_b
+
+  let diff_to_a_pixel = map(diff_to_a, 0, a_width, 0, canvas_size)
+  let diff_to_b_pixel = map(diff_to_b, 0, b_width, 0, canvas_size)
+
+  if (abs(diff_to_a_pixel) < 5 && abs(diff_to_b_pixel) < 5 && abs(diff_to_width_pixel) < 10){
+    current_target = null
+    frames_until_rerender = 1 //trigger a high res after one frame render now that we are here
+    reset_zoom()
     return
   }
-  max_iterations = sel
+
+  let zoom_to_wh = canvas_size - diff_to_width_pixel
+  if (zoom_to_wh < canvas_size/2) {
+    // oh boy slow that down
+    zoom_to_wh = canvas_size/2
+  }
+  if (zoom_to_wh > canvas_size*1.5) {
+    zoom_to_wh = canvas_size*1.5
+  }
+  // ^ if zoom in or out too fast to be followed
+
+  zoom_tow = zoom_to_wh
+  zoom_toh = zoom_to_wh
+  zoom_tox = (canvas_size / 2) - diff_to_a_pixel
+  zoom_toy = (canvas_size / 2) - diff_to_b_pixel
+
+  // dont rerender instantly, wont keep up and will cause circling around the target instead of nearing it
   frames_until_rerender = render_wait_frames
 }
 
-let mandelbrot_image
-let max_iterations_select;
 
+let max_iterations_select
+let test_button
+
+/**
+ * 
+ * SETUP
+ * 
+ */
 function setup() {
   // canvas_size = Math.min(windowWidth, windowHeight)
   createCanvas(canvas_size, canvas_size);
@@ -157,25 +236,33 @@ function setup() {
   max_iterations_select.option(750)
   max_iterations_select.option(1000)
   max_iterations_select.option(1500)
+  max_iterations_select.option(3000)
   max_iterations_select.option(5000)
   max_iterations_select.option("auto")
   max_iterations_select.changed(max_iterations_changed)
 
 
-
+  let available_targets = Object.keys(targets)
+  for (let i = 0; i < available_targets.length; i++){
+    let target_button = test_button = createButton(available_targets[i])
+    target_button.position(canvas_size+10, 70 + (30*i))
+    target_button.mouseClicked(target_clicked)
+  }
 
   // initial zoom position:
-  zoom_w = zoom_tow = canvas_size
-  zoom_h = zoom_toh = canvas_size
-  zoom_x = zoom_tox = canvas_size / 2
-  zoom_y = zoom_toy = canvas_size / 2
+  reset_zoom()
 }
 
 
+/**
+ * 
+ * DRAW
+ * 
+ */
 function draw() {
-  background(55);
+  //mandelbrot_image.save('mandeldarm', 'png');
 
-  //mandelbrot_image.save('saved-image', 'png');
+  background(55);
 
   //tween/smooth motion
   zoom_x = lerp(zoom_x, zoom_tox, .1);
@@ -186,33 +273,80 @@ function draw() {
   let new_img_x = zoom_x-zoom_w/2
   let new_img_y = zoom_y-zoom_h/2
 
+  // draw the current image of the mandelbrot set
   image(mandelbrot_image,new_img_x, new_img_y, zoom_w, zoom_h);
+
+
+  // information top left:
   textSize(8);
-  fill(255, 255, 255);
+  fill(125, 125, 125);
+  text('a:'+current_coordinate_a, 5, 10);
+  text('b:'+current_coordinate_b, 5, 20)
+  text('Zoom: 10^'+ Math.floor(current_zoom_log10*100)/100, 5, 30)
 
-  let a_coord = ((min_x+max_x)/2)
-  let b_coord = ((min_y+max_y)/2)
-  text('a:'+a_coord, 5, 10);
-  text('b:'+b_coord, 5, 20)
-
-  let zoom_pow = Math.floor(Math.log10((1/(max_x - min_x)))) // might not be accurate
-  text('Zoom: 10^'+zoom_pow, 5, 30)
-
-
-  // console.log(frames_until_rerender)
   frames_until_rerender = frames_until_rerender - 1
-
 
   if (frames_until_rerender == render_wait_frames - 5){
     rerender(0.25) // start full resultion render if user didnt interact for render_wait_frames = 50
+    reset_zoom()
+    return
   }
 
   if (frames_until_rerender == 0){
     rerender(1) // start full resultion render if user didnt interact for render_wait_frames = 50
-    frames_until_rerender = 5000
+    reset_zoom()
+    return
+  }
+
+  // a little hacky,
+  // if there is a target currently, call this function to move closer to it
+  // this will then set "frames_until_rerender" to "render_wait_frames"
+  // wait 7 frames to move closer again (will allow low res render to happen in time)
+  if (current_target != null && frames_until_rerender < render_wait_frames - 5){
+    move_to_target()
+    return
+  }
+
+}
+
+
+/**
+ * 
+ * EVENT LISTENERS:
+ * 
+ */
+
+function target_clicked(e){
+
+  min_x = -2.3
+  max_x = 0.8
+  min_y = 1.5
+  max_y = -1.5
+
+  
+  button_text = e.path[0].innerHTML
+  max_iterations = targets[button_text][3]
+  max_iterations_select.selected(max_iterations)
+
+  if (button_text === "reset"){
+    current_target=null
+    rerender()
+  }else{
+    current_target = targets[button_text]
+    move_to_target()
   }
 }
 
+// Event Listener for the max_iterations dropdown menu
+function max_iterations_changed(){
+  let sel = max_iterations_select.value()
+  if (sel === "auto"){
+    // do something smart
+    return
+  }
+  max_iterations = sel
+  frames_until_rerender = render_wait_frames
+}
 
 function mouseDragged() {
   if (mouseX > canvas_size || mouseY > canvas_size){
