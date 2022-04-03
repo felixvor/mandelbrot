@@ -267,7 +267,7 @@ function setup() {
   for (let i = 0; i < available_targets.length; i++){
     let target_button = test_button = createButton(available_targets[i])
     target_button.position(canvas_size+10, 120 + (30*i))
-    target_button.mouseClicked(target_clicked)
+    target_button.mouseClicked(() => target_clicked(available_targets[i]))
   }
 
   // initial zoom position:
@@ -337,13 +337,12 @@ function draw() {
  * 
  */
 
-function target_clicked(e){
+function target_clicked(button_text){
   min_x = -2.3
   max_x = 0.8
   min_y = 1.5
   max_y = -1.5
 
-  button_text = e.path[0].innerHTML
   max_iterations = targets[button_text][3]
   max_iterations_select.selected(max_iterations)
 
