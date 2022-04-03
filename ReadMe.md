@@ -3,3 +3,6 @@ An interactive and highly unoptimized Mandelbrot explorer that runs in your brow
 
 
 Try the [live demo](https://bratp.fun/mandelbrot)
+
+---
+Inspired by Daniel Shiffman
