@@ -1,7 +1,6 @@
 let max_iterations = 100
 let infinity = 100
-let canvas_size = 500
-
+let canvas_size = localStorage.getItem('canvas_size') || 512
 // the image of the mandelbrot set that is currently shown
 let mandelbrot_image
 
@@ -96,7 +95,7 @@ function mandelbrot(x, y, render_size){
 // based on the global variables that define the currently visible area
 // use resolution < 1 to be faster but with less detail
 function make_mandelbrot_image(resolution=1){
-  let render_size = canvas_size*resolution
+  let render_size = Math.floor(canvas_size*resolution)
   let img = createImage(render_size, render_size);
   img.loadPixels()
   for (let x = 0; x < render_size; x++){
@@ -211,7 +210,7 @@ function move_to_target(){
 }
 
 
-let max_iterations_select
+let resolution_select, max_iterations_select
 let test_button
 
 /**
@@ -220,16 +219,38 @@ let test_button
  * 
  */
 function setup() {
-  // canvas_size = Math.min(windowWidth, windowHeight)
+
+  
+  let selected_canvas_size = 512 // value to show in dropdown select, might be string
+  if (canvas_size === "window"){
+    canvas_size = Math.min(windowWidth, windowHeight)
+    selected_canvas_size = "window"
+  }else{
+    canvas_size = parseFloat(canvas_size)
+    selected_canvas_size = canvas_size
+  }
+
   createCanvas(canvas_size, canvas_size);
 
   mandelbrot_image = make_mandelbrot_image()
 
-  let max_iterations_info = createElement('h5', 'number of iterations:');
-  max_iterations_info.position(canvas_size+10, 0);
+  let resolution_select_info = createElement('h5', 'Image Resoultion:');
 
+  resolution_select_info.position(canvas_size+10, 0);
+  resolution_select = createSelect();
+  resolution_select.position(canvas_size+10, 40);
+  resolution_select.option(360)
+  resolution_select.option(512)
+  resolution_select.option(720)
+  resolution_select.option(1080)
+  resolution_select.option("window")
+  resolution_select.selected(selected_canvas_size)
+  resolution_select.changed(resolution_changed)
+
+  let max_iterations_info = createElement('h5', 'number of iterations:');
+  max_iterations_info.position(canvas_size+10, 40);
   max_iterations_select = createSelect();
-  max_iterations_select.position(canvas_size+10, 40);
+  max_iterations_select.position(canvas_size+10, 80);
   max_iterations_select.option(100)
   max_iterations_select.option(250)
   max_iterations_select.option(500)
@@ -245,7 +266,7 @@ function setup() {
   let available_targets = Object.keys(targets)
   for (let i = 0; i < available_targets.length; i++){
     let target_button = test_button = createButton(available_targets[i])
-    target_button.position(canvas_size+10, 70 + (30*i))
+    target_button.position(canvas_size+10, 120 + (30*i))
     target_button.mouseClicked(target_clicked)
   }
 
@@ -317,13 +338,11 @@ function draw() {
  */
 
 function target_clicked(e){
-
   min_x = -2.3
   max_x = 0.8
   min_y = 1.5
   max_y = -1.5
 
-  
   button_text = e.path[0].innerHTML
   max_iterations = targets[button_text][3]
   max_iterations_select.selected(max_iterations)
@@ -335,6 +354,15 @@ function target_clicked(e){
     current_target = targets[button_text]
     move_to_target()
   }
+}
+
+// Event Listener for the resolution dropdown menu
+function resolution_changed(){
+  let sel = resolution_select.value()
+  // i wish resize canvas and a call to setup would work
+  // but p5 doesnt like manual setup calls :(
+  localStorage.setItem('canvas_size', sel);
+  window.location.reload();
 }
 
 // Event Listener for the max_iterations dropdown menu
