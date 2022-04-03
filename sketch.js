@@ -1,6 +1,8 @@
-let max_iterations = 100
-let infinity = 100
+let max_iterations = 250
+let infinity = 2
 let canvas_size = localStorage.getItem('canvas_size') || 512
+let color_scheme = "no_scheme"
+
 // the image of the mandelbrot set that is currently shown
 let mandelbrot_image
 
@@ -87,8 +89,34 @@ function mandelbrot(x, y, render_size){
     }
     iteration++
   }
-  let pixel_brightness = map(iteration, 0, max_iterations, 0, 255)
-  return [pixel_brightness]
+
+  let pixel_brightness
+
+  if (color_scheme === "no_scheme"){
+    pixel_brightness = map(iteration, 0, max_iterations, 0, 255)
+    return [pixel_brightness]
+  }
+
+  if (color_scheme === "basic"){
+    if (iteration === max_iterations){
+      pixel_brightness = 0
+    }else{
+      pixel_brightness = map(iteration, 0, max_iterations, 0, 255)
+    }
+    return [pixel_brightness]
+  }
+
+  if (color_scheme === "normalized"){
+    if (iteration === max_iterations){
+      pixel_brightness = 0
+    }else{
+      let normed = map(iteration, 0, max_iterations, 0, 1)
+      pixel_brightness = map(sqrt(normed), 0, 1, 0, 255)
+    }
+    return [pixel_brightness]
+  }
+
+  
 }
 
 // return an image of canvas_size*canvas_size of the mandelbrot set
@@ -210,7 +238,7 @@ function move_to_target(){
 }
 
 
-let resolution_select, max_iterations_select
+let resolution_select, color_scheme_select, max_iterations_select
 let test_button
 
 /**
@@ -235,7 +263,6 @@ function setup() {
   mandelbrot_image = make_mandelbrot_image()
 
   let resolution_select_info = createElement('h5', 'Image Resoultion:');
-
   resolution_select_info.position(canvas_size+10, 0);
   resolution_select = createSelect();
   resolution_select.position(canvas_size+10, 40);
@@ -247,10 +274,19 @@ function setup() {
   resolution_select.selected(selected_canvas_size)
   resolution_select.changed(resolution_changed)
 
+  let color_scheme_select_info = createElement('h5', 'Color Scheme:');
+  color_scheme_select_info.position(canvas_size+10, 40);
+  color_scheme_select = createSelect();
+  color_scheme_select.position(canvas_size+10, 80);
+  color_scheme_select.option("no_scheme")
+  color_scheme_select.option("basic")
+  color_scheme_select.option("normalized")
+  color_scheme_select.changed(color_scheme_changed)
+
   let max_iterations_info = createElement('h5', 'number of iterations:');
-  max_iterations_info.position(canvas_size+10, 40);
+  max_iterations_info.position(canvas_size+10, 80);
   max_iterations_select = createSelect();
-  max_iterations_select.position(canvas_size+10, 80);
+  max_iterations_select.position(canvas_size+10, 120);
   max_iterations_select.option(100)
   max_iterations_select.option(250)
   max_iterations_select.option(500)
@@ -266,7 +302,7 @@ function setup() {
   let available_targets = Object.keys(targets)
   for (let i = 0; i < available_targets.length; i++){
     let target_button = test_button = createButton(available_targets[i])
-    target_button.position(canvas_size+10, 120 + (30*i))
+    target_button.position(canvas_size+10, 160 + (30*i))
     target_button.mouseClicked(() => target_clicked(available_targets[i]))
   }
 
@@ -364,6 +400,13 @@ function resolution_changed(){
   window.location.reload();
 }
 
+// Event Listener for the color sheme dropdown menu
+function color_scheme_changed(){
+  let sel = color_scheme_select.value()
+  color_scheme = sel
+  frames_until_rerender = render_wait_frames
+}
+
 // Event Listener for the max_iterations dropdown menu
 function max_iterations_changed(){
   let sel = max_iterations_select.value()
@@ -371,7 +414,7 @@ function max_iterations_changed(){
     // do something smart
     return
   }
-  max_iterations = sel
+  max_iterations = parseFloat(sel)
   frames_until_rerender = render_wait_frames
 }
 
