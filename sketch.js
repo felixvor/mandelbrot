@@ -135,6 +135,12 @@ function mandelbrot(x, y, render_size){
 // based on the global variables that define the currently visible area
 // use resolution < 1 to be faster but with less detail
 function make_mandelbrot_image(preview=false){
+
+  trip_progess += 0.005
+  if (trip_progess>1){
+    trip_progess=0
+  }
+
   let render_size
   if (preview){
     render_size = Math.floor(canvas_size*preview_resolution)
@@ -331,11 +337,6 @@ function setup() {
 function draw() {
   //mandelbrot_image.save('mandeldarm', 'png');
 
-  trip_progess += 0.00025
-  if (trip_progess>1){
-    trip_progess=0
-  }
-
   background(55);
 
   //tween/smooth motion
@@ -429,9 +430,7 @@ function color_scheme_changed(){
 
 // Event Listener for the max_iterations dropdown menu
 function max_iterations_changed(){
-  console.log(max_iterations_select.value())
   let sel = Math.floor(Math.pow(max_iterations_select.value(), 1.5))
-  console.log(sel)
   max_iterations_info.html("number of iterations ("+sel+"):")
   if (sel === "auto"){
     // do something smart
