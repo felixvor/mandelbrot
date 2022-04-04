@@ -1,6 +1,6 @@
 let max_iterations = 250
 let infinity = 4
-let canvas_size = localStorage.getItem('canvas_size') || 512
+let canvas_size = localStorage.getItem('canvas_size') || 720
 let color_scheme = "no_scheme"
 let trip_progess = 0
 
@@ -36,7 +36,8 @@ let targets = {
   "starfish":[-0.374004139, 0.659792175, 1.75, 1000],
   "tree":[-1.940157343, 0.000001, 5.5, 250],
   "sun":[-0.776592847, -0.136640848, 5, 1000],
-  "stormclouds":[-1.746780894, 0.004784543, 5.3, 1000]
+  "stormclouds":[-1.746780894, 0.004784543, 5.3, 1000],
+  "santa":[-1.4177481933, 0.0001407843, 8.5, 3000]
 }
 
 // zoom variables:
@@ -264,7 +265,7 @@ function move_to_target(){
 }
 
 
-let resolution_select, color_scheme_select, max_iterations_select, max_iterations_info
+let resolution_select, preview_quality_select, color_scheme_select, max_iterations_select, max_iterations_info
 let test_button
 
 /**
@@ -300,10 +301,22 @@ function setup() {
   resolution_select.selected(selected_canvas_size)
   resolution_select.changed(resolution_changed)
 
+
+  let preview_quality_select_info = createElement('h5', 'Preview Quality:');
+  preview_quality_select_info.position(canvas_size+10, 40);
+  preview_quality_select = createSelect();
+  preview_quality_select.position(canvas_size+10, 80);
+  preview_quality_select.option("100%")
+  preview_quality_select.option("75%")
+  preview_quality_select.option("50%")
+  preview_quality_select.option("25%")
+  preview_quality_select.selected("50%")
+  preview_quality_select.changed(preview_quality_select_changed)
+
   let color_scheme_select_info = createElement('h5', 'Color Scheme:');
-  color_scheme_select_info.position(canvas_size+10, 40);
+  color_scheme_select_info.position(canvas_size+10, 80);
   color_scheme_select = createSelect();
-  color_scheme_select.position(canvas_size+10, 80);
+  color_scheme_select.position(canvas_size+10, 120);
   color_scheme_select.option("no_scheme")
   color_scheme_select.option("fill")
   color_scheme_select.option("colormap")
@@ -311,16 +324,16 @@ function setup() {
   color_scheme_select.changed(color_scheme_changed)
 
   max_iterations_info = createElement('h5', 'number of iterations: ('+max_iterations+')');
-  max_iterations_info.position(canvas_size+10, 80);
+  max_iterations_info.position(canvas_size+10, 120);
   max_iterations_select = createSlider(4,450,50,1);
-  max_iterations_select.position(canvas_size+10, 120);
+  max_iterations_select.position(canvas_size+10, 160);
   max_iterations_select.input(max_iterations_changed)
 
 
   let available_targets = Object.keys(targets)
   for (let i = 0; i < available_targets.length; i++){
     let target_button = test_button = createButton(available_targets[i])
-    target_button.position(canvas_size+10, 160 + (30*i))
+    target_button.position(canvas_size+10, 180 + (30*i))
     target_button.mouseClicked(() => target_clicked(available_targets[i]))
   }
 
@@ -419,6 +432,12 @@ function resolution_changed(){
   // but p5 doesnt like manual setup calls :(
   localStorage.setItem('canvas_size', sel);
   window.location.reload();
+}
+
+// Event Listener for the preview_quality dropdown menu
+function preview_quality_select_changed(){
+  let sel = preview_quality_select.value()
+  preview_resolution = parseInt(sel.replace("%",""))/100
 }
 
 // Event Listener for the color sheme dropdown menu
