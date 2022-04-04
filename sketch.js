@@ -1,7 +1,11 @@
 let max_iterations = 250
-let infinity = 2
+let infinity = 4
 let canvas_size = localStorage.getItem('canvas_size') || 512
 let color_scheme = "no_scheme"
+let trip_progess = 0
+
+// let evolving_color_iteration = 0
+let evolving_color_values = []
 
 // the image of the mandelbrot set that is currently shown
 let mandelbrot_image
@@ -16,6 +20,9 @@ let max_y = -1.5
 let current_coordinate_a = -0.75
 let current_coordinate_b = 0
 let current_zoom_log10 = -0.5
+
+// the factor to multiply the canvas_size (pixels) for rendering a preview image
+let preview_resolution = 1/4
 
 // when this is replaced with a list of coordinates, zoom and pan to the position will start
 let current_target = null
@@ -42,7 +49,7 @@ let zoom_step = .001; //zoom step per mouse tick
 let frames_until_rerender = Math.infinity 
 let render_wait_frames = 50 // after user interaction, wait this long until new full res render, show half res render earlier
 
-
+let drop_of_acid
 // takes a coordinate and tells you if its on the complex plane
 // render size is the pixel width and height of the image, so the x and y coordinates from the complex plane can be mapped accordingly
 function mandelbrot(x, y, render_size){
@@ -94,46 +101,58 @@ function mandelbrot(x, y, render_size){
 
   if (color_scheme === "no_scheme"){
     pixel_brightness = map(iteration, 0, max_iterations, 0, 255)
-    return [pixel_brightness]
+    return [pixel_brightness, pixel_brightness, pixel_brightness]
   }
 
-  if (color_scheme === "basic"){
+  if (color_scheme === "fill"){
     if (iteration === max_iterations){
       pixel_brightness = 0
     }else{
-      pixel_brightness = map(iteration, 0, max_iterations, 0, 255)
+      pixel_brightness = map(iteration- log(log(a*a+b*b))/Math.log(2), 0, max_iterations, 0, 255)
     }
-    return [pixel_brightness]
+    return [pixel_brightness, pixel_brightness, pixel_brightness]
   }
 
-  if (color_scheme === "normalized"){
+  if (color_scheme === "colormap" || color_scheme == "evolving"){
+    let saturation = 0.7
     if (iteration === max_iterations){
-      pixel_brightness = 0
-    }else{
-      let normed = map(iteration, 0, max_iterations, 0, 1)
-      pixel_brightness = map(sqrt(normed), 0, 1, 0, 255)
+      saturation = 0.6
     }
-    return [pixel_brightness]
-  }
 
-  
+    let col = iteration //- log(log(a*a+b*b))/Math.log(2);
+    let hue = map(col, 0, max_iterations, 0, 1)
+    if (color_scheme == "evolving"){
+      col = hslToRgb(trip_progess+hue, saturation,0.5)
+    }else{
+      col = hslToRgb(0.043+hue, 0.7,0.5)
+    }
+    return col
+  }
 }
+
 
 // return an image of canvas_size*canvas_size of the mandelbrot set
 // based on the global variables that define the currently visible area
 // use resolution < 1 to be faster but with less detail
-function make_mandelbrot_image(resolution=1){
-  let render_size = Math.floor(canvas_size*resolution)
+function make_mandelbrot_image(preview=false){
+  let render_size
+  if (preview){
+    render_size = Math.floor(canvas_size*preview_resolution)
+  }else{
+    render_size = canvas_size
+  }
+  
   let img = createImage(render_size, render_size);
   img.loadPixels()
+  evolving_color_values = [render_size*render_size]
   for (let x = 0; x < render_size; x++){
     for(let y = 0; y < render_size; y++){
       let color = mandelbrot(x, y, render_size)
-      let pixel = (x+y*render_size)*4
-      img.pixels[pixel+0] = color // r value
-      img.pixels[pixel+1] = color // g value
-      img.pixels[pixel+2] = color // b value
-      img.pixels[pixel+3] = 255 // h value
+      let pixel_index = (x+y*render_size)*4
+      img.pixels[pixel_index+0] = color[0] // r value
+      img.pixels[pixel_index+1] = color[1] // g value
+      img.pixels[pixel_index+2] = color[2] // b value
+      img.pixels[pixel_index+3] = 255 // h value
     }
   }
   img.updatePixels()
@@ -145,7 +164,7 @@ function make_mandelbrot_image(resolution=1){
 
 // after the global variables of the zoom and image position change
 // call this to update the image of the mandelbrot set accordingly
-function rerender(resolution = 1){
+function rerender(preview){
   let new_img_x = zoom_x - zoom_w/2
   let new_img_y = zoom_y - zoom_h/2
   let new_img_w = zoom_w
@@ -178,7 +197,8 @@ function rerender(resolution = 1){
   current_coordinate_b = ((min_y+max_y)/2)
   current_zoom_log10 =Math.log10((1/(max_x - min_x))) // might not be accurate
 
-  mandelbrot_image = make_mandelbrot_image(resolution)
+  mandelbrot_image = make_mandelbrot_image(preview=preview)
+
 }
 
 // make the current view the new default
@@ -238,7 +258,7 @@ function move_to_target(){
 }
 
 
-let resolution_select, color_scheme_select, max_iterations_select
+let resolution_select, color_scheme_select, max_iterations_select, max_iterations_info
 let test_button
 
 /**
@@ -279,24 +299,16 @@ function setup() {
   color_scheme_select = createSelect();
   color_scheme_select.position(canvas_size+10, 80);
   color_scheme_select.option("no_scheme")
-  color_scheme_select.option("basic")
-  color_scheme_select.option("normalized")
+  color_scheme_select.option("fill")
+  color_scheme_select.option("colormap")
+  color_scheme_select.option("evolving")
   color_scheme_select.changed(color_scheme_changed)
 
-  let max_iterations_info = createElement('h5', 'number of iterations:');
+  max_iterations_info = createElement('h5', 'number of iterations: ('+max_iterations+')');
   max_iterations_info.position(canvas_size+10, 80);
-  max_iterations_select = createSelect();
+  max_iterations_select = createSlider(4,450,50,1);
   max_iterations_select.position(canvas_size+10, 120);
-  max_iterations_select.option(100)
-  max_iterations_select.option(250)
-  max_iterations_select.option(500)
-  max_iterations_select.option(750)
-  max_iterations_select.option(1000)
-  max_iterations_select.option(1500)
-  max_iterations_select.option(3000)
-  max_iterations_select.option(5000)
-  max_iterations_select.option("auto")
-  max_iterations_select.changed(max_iterations_changed)
+  max_iterations_select.input(max_iterations_changed)
 
 
   let available_targets = Object.keys(targets)
@@ -319,6 +331,11 @@ function setup() {
 function draw() {
   //mandelbrot_image.save('mandeldarm', 'png');
 
+  trip_progess += 0.00025
+  if (trip_progess>1){
+    trip_progess=0
+  }
+
   background(55);
 
   //tween/smooth motion
@@ -329,6 +346,7 @@ function draw() {
 
   let new_img_x = zoom_x-zoom_w/2
   let new_img_y = zoom_y-zoom_h/2
+
 
   // draw the current image of the mandelbrot set
   image(mandelbrot_image,new_img_x, new_img_y, zoom_w, zoom_h);
@@ -344,13 +362,13 @@ function draw() {
   frames_until_rerender = frames_until_rerender - 1
 
   if (frames_until_rerender == render_wait_frames - 5){
-    rerender(0.25) // start full resultion render if user didnt interact for render_wait_frames = 50
+    rerender(preview=true) // start full resultion render if user didnt interact for render_wait_frames = 50
     reset_zoom()
     return
   }
 
   if (frames_until_rerender == 0){
-    rerender(1) // start full resultion render if user didnt interact for render_wait_frames = 50
+    rerender(preview=false) // start full resultion render if user didnt interact for render_wait_frames = 50
     reset_zoom()
     return
   }
@@ -380,7 +398,9 @@ function target_clicked(button_text){
   max_y = -1.5
 
   max_iterations = targets[button_text][3]
-  max_iterations_select.selected(max_iterations)
+
+  max_iterations_select.value(Math.ceil(Math.pow(max_iterations, 2/3)))
+  max_iterations_changed()
 
   if (button_text === "reset"){
     current_target=null
@@ -409,13 +429,16 @@ function color_scheme_changed(){
 
 // Event Listener for the max_iterations dropdown menu
 function max_iterations_changed(){
-  let sel = max_iterations_select.value()
+  console.log(max_iterations_select.value())
+  let sel = Math.floor(Math.pow(max_iterations_select.value(), 1.5))
+  console.log(sel)
+  max_iterations_info.html("number of iterations ("+sel+"):")
   if (sel === "auto"){
     // do something smart
     return
   }
   max_iterations = parseFloat(sel)
-  frames_until_rerender = render_wait_frames
+  frames_until_rerender = render_wait_frames-4
 }
 
 function mouseDragged() {
@@ -456,3 +479,30 @@ function mouseWheel(event) {
   frames_until_rerender = render_wait_frames
 }
 
+
+
+function hslToRgb(h, s, l) {
+  var r, g, b;
+
+  if (s == 0) {
+    r = g = b = l; // achromatic
+  } else {
+    function hue2rgb(p, q, t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    }
+
+    var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    var p = 2 * l - q;
+
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+
+  return [ r * 255, g * 255, b * 255 ];
+}
